@@ -26,18 +26,28 @@ class StudentTrainer:
         learning_rate: float = 2e-4,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         fp16: bool = True,
+        output_dir: str = "lora_output",
     ):
         self.device = device
+        self.output_dir = output_dir
         # Force fp16=False if not CUDA
         if not (isinstance(device, str) and device.startswith("cuda")):
             fp16 = False
+            if device == "cpu":
+                print("Warning: Loading model on CPU. This may require significant RAM.")
+                print("Consider using a quantized model or GPU if available.")
+        
         self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        # Use 8-bit quantization for CPU to reduce memory usage
+        load_in_8bit = device == "cpu"
         
         self.model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
             torch_dtype=torch.float16 if fp16 else torch.float32,
             device_map="auto" if device != "cpu" else None,
+            load_in_8bit=load_in_8bit,
         )
         
         lora_config = LoraConfig(
@@ -51,7 +61,7 @@ class StudentTrainer:
         self.model = get_peft_model(self.model, lora_config)
         
         self.training_args = TrainingArguments(
-            output_dir="lora_output",
+            output_dir=self.output_dir,
             num_train_epochs=1,
             per_device_train_batch_size=4,
             gradient_accumulation_steps=4,
@@ -77,7 +87,7 @@ class StudentTrainer:
         dataset = dataset.map(format_prompt)
         
         sft_config = SFTConfig(
-            output_dir="lora_output",
+            output_dir=self.output_dir,
             num_train_epochs=num_epochs,
             per_device_train_batch_size=4,
             gradient_accumulation_steps=4,
@@ -94,7 +104,7 @@ class StudentTrainer:
             model=self.model,
             train_dataset=dataset,
             args=sft_config,
-            processing_class=self.tokenizer,
+            tokenizer=self.tokenizer,
         )
 
         trainer.train()
@@ -120,7 +130,7 @@ class StudentTrainer:
             
             if match:
                 pred_answer = int(match.group(1))
-                true_answer = int(re.search(r"####\s*(\d+)", example["answer"]).group(1))
+                true_answer = int(example["answer"])
                 correct += pred_answer == true_answer
             
             total += 1
@@ -128,6 +138,8 @@ class StudentTrainer:
         return correct / total if total > 0 else 0.0
     
     def save(self, adapter_dir: str):
+        # Note: This only saves the LoRA adapter weights, not the base model.
+        # When loading with from_adapter(), the base model name must be specified separately.
         self.model.save_pretrained(adapter_dir)
         self.tokenizer.save_pretrained(adapter_dir)
     

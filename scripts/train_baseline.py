@@ -37,7 +37,8 @@ def main():
         lora_alpha=32,
         learning_rate=2e-4,
         device=device,
-        fp16=device == "cuda"
+        fp16=device == "cuda",
+        output_dir=str(out_dir / "lora_output")
     )
     
     trainer.fit(
@@ -48,9 +49,12 @@ def main():
     
     accuracy = trainer.score(args.dev_file)
     
+    with open(args.train_file) as f:
+        train_tokens = sum(len(json.loads(line)["text"].split()) for line in f)
+    
     metrics = {
         "accuracy": accuracy,
-        "train_tokens": len(trainer.tokenizer) * args.epochs,
+        "train_tokens": train_tokens * args.epochs,
         "epochs": args.epochs
     }
     
