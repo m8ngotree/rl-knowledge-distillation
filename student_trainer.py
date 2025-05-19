@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import torch
+import wandb
 from datasets import load_dataset
 from peft import LoraConfig, PeftModel, get_peft_model
 from transformers import (
@@ -27,9 +28,26 @@ class StudentTrainer:
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         fp16: bool = True,
         output_dir: str = "lora_output",
+        wandb_project: str = "rl-optimized-teaching",
+        wandb_run_name: Optional[str] = None,
     ):
         self.device = device
         self.output_dir = output_dir
+        
+        # Initialize wandb
+        wandb.init(
+            project=wandb_project,
+            name=wandb_run_name,
+            config={
+                "base_model": base_model_name,
+                "lora_r": lora_r,
+                "lora_alpha": lora_alpha,
+                "learning_rate": learning_rate,
+                "device": device,
+                "fp16": fp16,
+            }
+        )
+        
         # Force fp16=False if not CUDA
         if not (isinstance(device, str) and device.startswith("cuda")):
             fp16 = False
@@ -98,6 +116,7 @@ class StudentTrainer:
             optim="adamw_torch",
             max_seq_length=max_seq_len,
             dataset_text_field="text",
+            report_to="wandb",  # Enable wandb reporting
         )
 
         trainer = SFTTrainer(
@@ -135,13 +154,18 @@ class StudentTrainer:
             
             total += 1
             
-        return correct / total if total > 0 else 0.0
+        accuracy = correct / total if total > 0 else 0.0
+        # Log accuracy to wandb
+        wandb.log({"dev_accuracy": accuracy})
+        return accuracy
     
     def save(self, adapter_dir: str):
         # Note: This only saves the LoRA adapter weights, not the base model.
         # When loading with from_adapter(), the base model name must be specified separately.
         self.model.save_pretrained(adapter_dir)
         self.tokenizer.save_pretrained(adapter_dir)
+        # Log model artifacts to wandb
+        wandb.save(adapter_dir)
     
     @classmethod
     def from_adapter(cls, adapter_dir: str, **kwargs):
@@ -154,7 +178,11 @@ class StudentTrainer:
         return instance
 
 if __name__ == "__main__":
-    trainer = StudentTrainer(device="cpu")
+    trainer = StudentTrainer(
+        device="cpu",
+        wandb_project="rl-optimized-teaching",
+        wandb_run_name="test-run"
+    )
     
     # Load and subset dataset
     dataset = load_dataset("json", data_files="data/gsm8k_train.jsonl")["train"]
@@ -166,4 +194,7 @@ if __name__ == "__main__":
     
     # Score on dev set
     accuracy = trainer.score("data/gsm8k_dev.jsonl")
-    print(f"Dev accuracy: {accuracy:.2%}") 
+    print(f"Dev accuracy: {accuracy:.2%}")
+    
+    # Close wandb run
+    wandb.finish() 
