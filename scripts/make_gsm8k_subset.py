@@ -1,14 +1,14 @@
-"""
-Create a 1 000-example train slice + 200-example dev slice from GSM8K,
-normalise each entry, and save to data/gsm8k_train.jsonl + gsm8k_dev.jsonl.
-
-After writing the files, print a token-count sanity check.
-"""
+# ------------------------------
+# make_gsm8k_subset.py  (only minimal edits)
+# ------------------------------
 from pathlib import Path
 import json, numpy as np, datasets, tiktoken, warnings
 
+END_TOKEN = "<|answer_end|>"  # Ensure this is defined and added to every CoT
+
+# Load GSM‑8K
 ds = datasets.load_dataset("openai/gsm8k", "main")
-train_full = list(ds["train"])            
+train_full = list(ds["train"])
 
 train = train_full[:1_000]
 dev   = train_full[1_000:1_200]
@@ -16,8 +16,9 @@ dev   = train_full[1_000:1_200]
 out_dir = Path("data")
 out_dir.mkdir(exist_ok=True)
 
+
 def dump(split, name):
-    with open(out_dir / f"gsm8k_{name}.jsonl", "w") as f:
+    with open(out_dir / f"gsm8k_{name}.jsonl", "w", encoding="utf‑8") as f:
         for row in split:
             q = row["question"].strip()
             a = row["answer"].strip()
@@ -26,18 +27,29 @@ def dump(split, name):
             except ValueError:
                 warnings.warn(f"Answer missing #### delimiter: {a[:60]}…")
                 continue
-            f.write(json.dumps({
-                "question": q,
-                "answer"  : final.strip(),
-                "cot"     : cot.strip()
-            }) + "\n")
+            cot = cot.strip().split("####")[0].rstrip()
+            final = final.strip()
+            # End with only the boxed answer, nothing after
+            cot_with_answer = f"{cot}\nThe final answer is: $\\boxed{{{final}}}$"
+            f.write(
+                json.dumps({
+                    "question": q,
+                    "answer": final,
+                    "cot": cot_with_answer,
+                })
+                + "\n"
+            )
+
 
 dump(train, "train")
-dump(dev,   "dev")
+dump(dev, "dev")
 
+# (unchanged) quick token‑count sanity check
 enc = tiktoken.get_encoding("cl100k_base")
 cot_lens = [
     len(enc.encode(json.loads(line)["cot"]))
-    for line in open(out_dir / "gsm8k_train.jsonl", encoding="utf-8")
+    for line in open(out_dir / "gsm8k_train.jsonl", encoding="utf‑8")
 ]
-print(f"{np.mean(cot_lens):.0f} avg CoT tokens  |  {sum(cot_lens):,} tokens total")
+print(
+    f"{np.mean(cot_lens):.0f} avg CoT tokens  |  {sum(cot_lens):,} tokens total (train)"
+)
