@@ -37,7 +37,8 @@ def save_to_cache(cache_file: str, qid: str, cot: str):
         f.write("\n")
 
 def generate_cot(question: str, api_key: str, max_tokens: int, temperature: float) -> Optional[str]:
-    prompt = f"""You are a math tutor. Provide a concise step-by-step solution before '####'.
+    prompt = f"""You are a math tutor. Solve the following math problem step by step. Show your work and calculations clearly. End your solution with "The final answer is: \\boxed{{[answer]}}" where [answer] is the integer answer.
+
 Question: {question}
 
 Solution:"""
@@ -101,6 +102,7 @@ def main():
                 save_to_cache(args.cache_file, qid, cot)
                 total_calls += 1
             f_out.write(json.dumps(entry) + "\n")
+            break
     
     print(f"\nSummary:")
     print(f"Total API calls: {total_calls}")

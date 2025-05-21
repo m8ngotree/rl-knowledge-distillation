@@ -17,17 +17,15 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class StopAfterBoxed(StoppingCriteria):
-    """Fallback safety‑net: rarely needed once <|answer_end|> is trained in."""
-
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
 
     def __call__(self, input_ids, scores, **kwargs):
-        # Only decode the last ~20 tokens for speed
-        text = self.tokenizer.decode(input_ids[0, -20:], skip_special_tokens=True)
-        return "\\boxed{" in text
+        # Only decode the last ~50 tokens for speed
+        text = self.tokenizer.decode(input_ids[0, -50:], skip_special_tokens=True)
+        # Check for complete boxed answer pattern
+        return "\\boxed{" in text and "}" in text.split("\\boxed{")[1]
 
 
 class StudentTrainer:
@@ -42,7 +40,7 @@ class StudentTrainer:
         output_dir: str = "lora_output",
         wandb_project: str = "rl-optimized-teaching",
         wandb_run_name: Optional[str] = None,
-        max_seq_len: int = 768,
+        max_seq_len: int = 4096,
     ):
         self.device = device
         self.output_dir = output_dir
@@ -119,7 +117,7 @@ class StudentTrainer:
             }
         dataset = dataset.map(format_prompt)
         
-        per_device_batch_size = 8 if torch.cuda.is_available() else 4
+        per_device_batch_size = 4 if torch.cuda.is_available() else 4
         
         sft_config = SFTConfig(
             output_dir=self.output_dir,
@@ -151,10 +149,9 @@ class StudentTrainer:
         self,
         dev_jsonl: str,
         batch_size: int = 8, 
-        max_new_tokens: int = 768, 
+        max_new_tokens: int = 2048, 
     ) -> float:
         dataset = load_dataset("json", data_files=dev_jsonl)["train"]
-        dataset = dataset.select(range(min(8, len(dataset)))) 
         
         self.model.eval()
         self.model.gradient_checkpointing_disable() 
@@ -189,7 +186,10 @@ class StudentTrainer:
                     max_new_tokens=max_new_tokens,
                     do_sample=False,
                     pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=None,
                     stopping_criteria=stopping_criteria,
+                    temperature=0.1,  # More deterministic
+                    num_beams=1,  # Greedy decoding
                 )
                 
                 full_decoded = self.tokenizer.batch_decode(outs, skip_special_tokens=True)
@@ -202,11 +202,15 @@ class StudentTrainer:
                     parsed_value = None
                     if extracted_ans_str:
                         try:
-                            parsed_value = int(extracted_ans_str)
+                            # Remove any commas from the answer string before converting to int
+                            cleaned_ans_str = extracted_ans_str.replace(",", "")
+                            parsed_value = int(cleaned_ans_str)
                         except ValueError:
                             print(f"  Warning: Could not convert '{extracted_ans_str}' to int for example {start + i}.")
                     
-                    correct_answer_val = int(current_example_data["answer"])
+                    # Clean the correct answer string similarly
+                    correct_answer_str = str(current_example_data["answer"]).replace(",", "")
+                    correct_answer_val = int(correct_answer_str)
 
                     print(f"\nExample {start + i} Debug:")
                     print(f"  Prompt: {repr(prompts[i])}") 

@@ -44,3 +44,7 @@ venv.bak/
 # Project specific
 data/
 *.log 
+
+# safetensors
+results/**/student_lora/*.safetensors
+wandb/

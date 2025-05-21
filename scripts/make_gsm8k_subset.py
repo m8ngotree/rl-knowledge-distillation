@@ -1,12 +1,6 @@
-# ------------------------------
-# make_gsm8k_subset.py  (only minimal edits)
-# ------------------------------
 from pathlib import Path
 import json, numpy as np, datasets, tiktoken, warnings
 
-END_TOKEN = "<|answer_end|>"  # Ensure this is defined and added to every CoT
-
-# Load GSM‑8K
 ds = datasets.load_dataset("openai/gsm8k", "main")
 train_full = list(ds["train"])
 
@@ -15,7 +9,6 @@ dev   = train_full[1_000:1_200]
 
 out_dir = Path("data")
 out_dir.mkdir(exist_ok=True)
-
 
 def dump(split, name):
     with open(out_dir / f"gsm8k_{name}.jsonl", "w", encoding="utf‑8") as f:
@@ -29,8 +22,7 @@ def dump(split, name):
                 continue
             cot = cot.strip().split("####")[0].rstrip()
             final = final.strip()
-            # End with only the boxed answer, nothing after
-            cot_with_answer = f"{cot}\nThe final answer is: $\\boxed{{{final}}}$"
+            cot_with_answer = f"{cot}\nThe final answer is: \\boxed{{{final}}}"
             f.write(
                 json.dumps({
                     "question": q,

@@ -44,13 +44,12 @@ def main():
     trainer.fit(
         train_jsonl=args.train_file,
         num_epochs=args.epochs,
-        max_seq_len=768
     )
     
     accuracy = trainer.score(args.dev_file)
     
     with open(args.train_file) as f:
-        train_tokens = sum(len(json.loads(line)["text"].split()) for line in f)
+        train_tokens = sum(len((json.loads(line)["question"] + " " + json.loads(line)["cot"]).split()) for line in f)
     
     metrics = {
         "accuracy": accuracy,
