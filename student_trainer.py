@@ -20,12 +20,13 @@ logger = logging.getLogger(__name__)
 class StopAfterBoxed(StoppingCriteria):
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.box_pattern = re.compile(r"\\boxed\{[-+]?\d+\}")
 
     def __call__(self, input_ids, scores, **kwargs):
-        # Only decode the last ~50 tokens for speed
-        text = self.tokenizer.decode(input_ids[0, -50:], skip_special_tokens=True)
+        # Only decode the last ~100 tokens for speed
+        text = self.tokenizer.decode(input_ids[0, -100:], skip_special_tokens=True)
         # Check for complete boxed answer pattern
-        return "\\boxed{" in text and "}" in text.split("\\boxed{")[1]
+        return bool(self.box_pattern.search(text))
 
 
 class StudentTrainer:
@@ -34,13 +35,13 @@ class StudentTrainer:
         base_model_name: str = "meta-llama/Meta-Llama-3.1-8B-Instruct",
         lora_r: int = 8,
         lora_alpha: int = 16,
-        learning_rate: float = 2e-4,
+        learning_rate: float = 1e-4,  # Lower learning rate for better stability
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         fp16: bool = True,
         output_dir: str = "lora_output",
         wandb_project: str = "rl-optimized-teaching",
         wandb_run_name: Optional[str] = None,
-        max_seq_len: int = 4096,
+        max_seq_len: int = 1024,
     ):
         self.device = device
         self.output_dir = output_dir
@@ -105,14 +106,16 @@ class StudentTrainer:
     def fit(
         self,
         train_jsonl: str,
-        num_epochs: int = 1,
+        num_epochs: int = 2,  # Increased to 2 epochs
     ):
         dataset = load_dataset("json", data_files=train_jsonl)["train"]
         
         def format_prompt(example):
             return {
                 "text": (
-                    f"{example['question']}" + " " + f"{example['cot']}"
+                    f"### Question:\n{example['question']}\n\n"
+                    f"### Solution (show your work and end with answer in \\boxed{{}}):\n"
+                    f"{example['cot'].strip()}{self.tokenizer.eos_token}"
                 )
             }
         dataset = dataset.map(format_prompt)
@@ -133,6 +136,8 @@ class StudentTrainer:
             dataset_text_field="text",
             report_to="wandb",
             gradient_checkpointing=True,
+            warmup_ratio=0.1,  # Add warmup
+            lr_scheduler_type="cosine",  # Use cosine learning rate schedule
         )
 
         self.model.train()
@@ -149,7 +154,7 @@ class StudentTrainer:
         self,
         dev_jsonl: str,
         batch_size: int = 8, 
-        max_new_tokens: int = 2048, 
+        max_new_tokens: int = 512, 
     ) -> float:
         dataset = load_dataset("json", data_files=dev_jsonl)["train"]
         
@@ -167,7 +172,8 @@ class StudentTrainer:
                 end = min(start + scoring_batch_size, total)
                 batch = dataset.select(range(start, end))
                 prompts = [
-                    f"{ex['question']}" 
+                    f"### Question:\n{ex['question']}\n\n"
+                    f"### Solution (show your work and end with answer in \\boxed{{}}):\n"
                     for ex in batch
                 ]
                 
@@ -279,7 +285,7 @@ if __name__ == "__main__":
         print(f"ERROR: Dev file {dev_file_path} not found. Please run make_gsm8k_subset.py.")
     else:
         try:
-            trainer.fit(train_file_to_use, num_epochs=1) 
+            trainer.fit(train_file_to_use, num_epochs=2) 
             accuracy = trainer.score("data/gsm8k_dev.jsonl")
             print(f"Dev accuracy: {accuracy:.2%}")
         except Exception as e:

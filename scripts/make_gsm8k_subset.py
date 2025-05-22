@@ -3,9 +3,11 @@ import json, numpy as np, datasets, tiktoken, warnings
 
 ds = datasets.load_dataset("openai/gsm8k", "main")
 train_full = list(ds["train"])
+test_full = list(ds["test"])  # Get the full test set
 
-train = train_full[:1_000]
-dev   = train_full[1_000:1_200]
+# Use full training set and test set
+train = train_full
+dev = test_full  # Use test set as dev set
 
 out_dir = Path("data")
 out_dir.mkdir(exist_ok=True)

@@ -1,5 +1,5 @@
 {
-  "accuracy": 0.495,
-  "train_tokens": 198561,
+  "accuracy": 0.3957543593631539,
+  "train_tokens": 745838,
   "epochs": 1
 }
