@@ -1,17 +1,16 @@
 # RL-Optimized Teaching
 
-This project implements a reinforcement learning (RL) based approach to optimize teaching strategies. It uses PPO (Proximal Policy Optimization) to learn optimal teaching policies and includes tools for generating Chain-of-Thought (CoT) solutions.
+This project implements a reinforcement learning (RL) based approach to optimize teaching strategies using language models. It fine-tunes Meta-Llama-3.1-8B-Instruct on GSM8K dataset with 4-bit LoRA for efficient training.
 
 ## Project Structure
 
 ```
 .
-├── scripts/
-│   └── sample_teacher_cot.py    # Script for generating CoT solutions using DeepSeek API
-├── tests/
-│   ├── test_mock_rl_loop.py     # Unit tests for RL environment and PPO training
-│   └── test_make_gsm8k_subset.py # Tests for GSM8K dataset processing
-└── requirements.txt             # Project dependencies
+├── train_finetune.py     # Main script for fine-tuning Llama model
+├── teach_env.py         # RL environment for teaching optimization
+├── infer.py            # Script for model inference
+├── evaluate.sh         # Evaluation script
+└── requirements.txt    # Project dependencies
 ```
 
 ## Installation
@@ -29,78 +28,57 @@ pip install -r requirements.txt
 
 ## Components
 
-### 1. Chain-of-Thought Generation (`scripts/sample_teacher_cot.py`)
+### 1. Model Fine-tuning (`train_finetune.py`)
 
-This script generates step-by-step solutions for math problems using the DeepSeek API. It includes caching functionality to avoid redundant API calls.
+This script fine-tunes Meta-Llama-3.1-8B-Instruct on the GSM8K dataset using 4-bit LoRA for efficient training.
 
 Key features:
-- Uses DeepSeek API for generating solutions
-- Implements caching to save API calls
-- Supports batch processing of questions
-- Configurable parameters (temperature, max tokens, etc.)
+- Uses 4-bit quantization with BitsAndBytes
+- Implements LoRA for parameter-efficient fine-tuning
+- Supports gradient accumulation for larger effective batch sizes
+- Configurable training parameters (batch size, epochs, etc.)
 
 Usage:
 ```bash
-python scripts/sample_teacher_cot.py \
-    --in_file input.jsonl \
-    --out_file output.jsonl \
-    --api_key YOUR_DEEPSEEK_API_KEY \
-    --model deepseek-r1 \
-    --max_tokens 768 \
-    --temperature 0.2
+python train_finetune.py \
+    --out_dir llama3-gsm8k \
+    --batch_size 2 \
+    --grad_acc 16 \
+    --epochs 3 \
+    --merge_fp16
 ```
 
-### 2. RL Environment and Training (`tests/test_mock_rl_loop.py`)
+### 2. RL Environment (`teach_env.py`)
 
-Implements a simple RL environment for testing PPO training. The environment is designed to be learnable with a clear optimal policy.
+Implements a reinforcement learning environment for optimizing teaching strategies. The environment is designed to work with language models and teaching scenarios.
 
 Key features:
-- `LearnableEnv`: A simple environment where the optimal action is 0.5
-- Reward function: `1.0 - (action - 0.5)²`
-- Uses stable-baselines3 PPO implementation
-- Includes comprehensive unit tests
+- Custom RL environment for teaching optimization
+- Integration with language models
+- Reward function based on teaching effectiveness
+- Support for various teaching scenarios
 
-The environment is designed to be:
-- Deterministic
-- Easy to learn
-- Fast to train
-- Suitable for testing RL algorithms
+### 3. Inference (`infer.py`)
 
-Example usage in tests:
-```python
-env = DummyVecEnv([lambda: LearnableEnv()])
-model = PPO(
-    "MlpPolicy",
-    env,
-    learning_rate=3e-4,
-    n_steps=64,
-    batch_size=64,
-    policy_kwargs=dict(net_arch=[dict(pi=[32], vf=[32])])
-)
-model.learn(total_timesteps=5000)
-```
+Script for running inference with the fine-tuned model.
 
-## Testing
+### 4. Evaluation (`evaluate.sh`)
 
-Run all tests:
-```bash
-pytest tests/
-```
-
-Run specific test:
-```bash
-pytest tests/test_mock_rl_loop.py -v
-```
+Shell script for evaluating model performance.
 
 ## Dependencies
 
 Key dependencies include:
-- `stable-baselines3`: For PPO implementation
-- `gymnasium`: For RL environment
-- `transformers`: For language model integration
-- `trl`: For RL with language models
-- `torch`: For deep learning
-- `numpy`: For numerical computations
+- `torch>=2.1.0`: PyTorch for deep learning
+- `transformers==4.51.3`: Hugging Face Transformers
+- `datasets>=2.18.0`: Dataset handling
+- `accelerate>=0.26.1`: Training acceleration
+- `bitsandbytes==0.42.0`: 4-bit quantization
+- `peft>=0.15.0`: Parameter-efficient fine-tuning
+- `trl==0.17.0`: Training with RL
+- `sentencepiece`: Tokenization
+- `tiktoken`: Token counting
+- `lm-eval==0.4.0`: Model evaluation
 
 See `requirements.txt` for complete list of dependencies.
 
@@ -118,6 +96,6 @@ See `requirements.txt` for complete list of dependencies.
 
 ## Acknowledgments
 
-- DeepSeek for providing the API
-- Stable-Baselines3 team for the RL implementation
-- OpenAI Gymnasium for the environment interface
+- Meta AI for the Llama model
+- Hugging Face for the Transformers library
+- OpenAI for the GSM8K dataset
