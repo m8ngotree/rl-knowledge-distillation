@@ -46,5 +46,6 @@ data/
 *.log 
 
 # safetensors
-results/**/student_lora/*.safetensors
+*.safetensors
+*.pt
 wandb/
