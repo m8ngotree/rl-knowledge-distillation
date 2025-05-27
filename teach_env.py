@@ -131,7 +131,7 @@ class TeachEnv:
     # -----------------------------------------------------------------
     # internal helpers
     # -----------------------------------------------------------------
-    def extract_answer(text: str) -> str | None:
+    def extract_answer(self, text: str) -> str | None:
         for pat in ANSWER_PATTERNS:
             if m := pat.search(text):
                 return m.group(1)
@@ -148,7 +148,7 @@ class TeachEnv:
                 inputs = self.tok(prompts, return_tensors="pt",
                                   padding=True, truncation=True,
                                   max_length=self.max_seq_len).to(self.device)
-                outs = self.model.generate(**inputs, max_new_tokens=64, temperature=0.0)
+                outs = self.model.generate(**inputs, max_new_tokens=64, do_sample=False)
                 decoded = self.tok.batch_decode(outs, skip_special_tokens=True)
             for pred, ex in zip(decoded, batch):
                 pred_ans = self.extract_answer(pred)
