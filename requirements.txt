@@ -1,12 +1,10 @@
-torch>=2.0.0
-transformers>=4.30.0
-datasets>=2.12.0
-peft>=0.4.0
-trl>=0.4.7
-wandb>=0.15.0
-tqdm>=4.65.0
-accelerate>=0.20.0
-bitsandbytes>=0.40.0
-requests>=2.31.0
-stable-baselines3>=2.1.0
-gymnasium>=0.29.0 
+torch>=2.1.0
+transformers==4.51.3
+datasets>=2.18.0
+accelerate>=0.26.1
+bitsandbytes==0.42.0        # pre-built for glibc≤2.31
+peft>=0.15.0
+trl==0.17.0                  # SFTTrainer lives here
+sentencepiece
+tiktoken
+lm-eval==0.4.0               # (optional) eval only
